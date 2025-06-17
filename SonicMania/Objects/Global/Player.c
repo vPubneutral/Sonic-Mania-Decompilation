@@ -559,15 +559,13 @@ void Player_Create(void *data)
                 self->jumpOffset   = TO_FIXED(5);
                 self->stateAbility = Player_JumpAbility_Sonic;
                 self->sensorY      = TO_FIXED(20);
+                // Controls Unchained Peelout switch
+                self->statePeelout = Player_Action_Peelout;
+                for (int32 f = 0; f < 4; ++f) {
+                    SpriteFrame *dst = RSDK.GetFrame(self->aniFrames, ANI_DASH, f + 1);
+                    SpriteFrame *src = RSDK.GetFrame(self->aniFrames, ANI_PEELOUT, f);
 
-                if (globals->medalMods & MEDAL_PEELOUT) {
-                    self->statePeelout = Player_Action_Peelout;
-                    for (int32 f = 0; f < 4; ++f) {
-                        SpriteFrame *dst = RSDK.GetFrame(self->aniFrames, ANI_DASH, f + 1);
-                        SpriteFrame *src = RSDK.GetFrame(self->aniFrames, ANI_PEELOUT, f);
-
-                        *dst = *src;
-                    }
+                    *dst = *src;
                 }
                 break;
 
@@ -577,6 +575,7 @@ void Player_Create(void *data)
                 self->jumpOffset   = TO_FIXED(0);
                 self->stateAbility = Player_JumpAbility_Tails;
                 self->sensorY      = TO_FIXED(16);
+                self->statePeelout = Player_Action_Peelout;
                 break;
 
             case ID_KNUCKLES:
@@ -585,6 +584,7 @@ void Player_Create(void *data)
                 self->jumpOffset   = TO_FIXED(5);
                 self->stateAbility = Player_JumpAbility_Knux;
                 self->sensorY      = TO_FIXED(20);
+                self->statePeelout = Player_Action_Peelout;
                 break;
 
 #if MANIA_USE_PLUS
@@ -594,6 +594,7 @@ void Player_Create(void *data)
                 self->jumpOffset   = TO_FIXED(5);
                 self->stateAbility = Player_JumpAbility_Mighty;
                 self->sensorY      = TO_FIXED(20);
+                self->statePeelout = Player_Action_Peelout;
                 break;
 
             case ID_RAY:
@@ -601,7 +602,8 @@ void Player_Create(void *data)
                 self->tailFrames   = -1;
                 self->jumpOffset   = TO_FIXED(5);
                 self->stateAbility = Player_JumpAbility_Ray;
-                self->sensorY      = TO_FIXED(20);
+                self->sensorY      = TO_FIXED(20);\
+                self->statePeelout = Player_Action_Peelout;
                 break;
 #endif
         }
@@ -670,7 +672,7 @@ void Player_Create(void *data)
             self->score1UP = 50000;
         }
         else {
-            self->lives    = Player->savedLives;
+            self->lives    = 99;  // Controls Unchained Extended infinite lives
             self->score    = Player->savedScore;
             self->score1UP = Player->savedScore1UP;
         }
@@ -1271,16 +1273,17 @@ bool32 Player_TryTransform(EntityPlayer *player, uint8 emeraldMasks)
         player->isTransforming  = true;
 #endif
 
-#if MANIA_USE_PLUS
-        if (!ERZStart && globals->superMusicEnabled)
-            Music_FadeOut(0.8);
-#else
-        if (!ERZStart)
-            Music_TransitionTrack(TRACK_SUPER, 0.04);
-#endif
-
-        player->jumpAbilityState = 0;
-        player->superState       = SUPERSTATE_FADEIN;
+// Controls Unchained Extended disabled
+// #if MANIA_USE_PLUS
+//         if (!ERZStart && globals->superMusicEnabled)
+//             Music_FadeOut(0.8);
+// #else
+//         if (!ERZStart)
+//             Music_TransitionTrack(TRACK_SUPER, 0.04);
+// #endif
+// 
+//         player->jumpAbilityState = 0;
+//         player->superState       = SUPERSTATE_FADEIN;
 
 #if MANIA_USE_PLUS
     }
@@ -3910,6 +3913,7 @@ void Player_State_Air(void)
                 if (self->velocity.y >= self->jumpCap)
                     StateMachine_Run(self->stateAbility);
                 break;
+                self->jumpAbilityState = 1;  // Controls Unchained roll-off air moves
 
             case ANI_SKID:
                 if (self->skidding <= 0)
@@ -3922,6 +3926,17 @@ void Player_State_Air(void)
 
             default: break;
         }
+
+        // Controls Unchained air curl code
+        if (self->animator.animationID == ANI_AIR_WALK || self->animator.animationID == ANI_RUN || self->animator.animationID == ANI_DASH || self->animator.animationID == ANI_SPRING_TWIRL || self->animator.animationID == ANI_SPRING_DIAGONAL) {
+            if (self->jumpPress) {
+                self->jumpAbilityState = 1;
+                self->state = Player_State_Air;
+                RSDK.PlaySfx(Player->sfxRelease, false, 255);
+                RSDK.SetSpriteAnimation(self->aniFrames, ANI_JUMP, &self->animator, false, 0);
+            }
+        }
+
     }
 }
 void Player_State_Roll(void)
@@ -4334,7 +4349,7 @@ void Player_State_Transform(void)
             self->state       = Player_State_Air;
             RSDK.SetSpriteAnimation(self->aniFrames, ANI_WALK, &self->animator, false, 3);
 #if MANIA_USE_PLUS
-            Music_PlayJingle(TRACK_SUPER);
+            // Music_PlayJingle(TRACK_SUPER); Controls Unchained Extended disabled 
 #endif
         }
     }
@@ -4348,8 +4363,8 @@ void Player_State_Transform(void)
         RSDK.SetSpriteAnimation(self->aniFrames, ANI_WALK, &self->animator, false, 3);
 
 #if MANIA_USE_PLUS
-        if (!ERZStart && globals->superMusicEnabled)
-            Music_PlayJingle(TRACK_SUPER);
+        // if (!ERZStart && globals->superMusicEnabled)
+            // Music_PlayJingle(TRACK_SUPER); Controls Unchained Extended disabled 
 #endif
     }
 }
@@ -4672,6 +4687,15 @@ void Player_State_TailsFlight(void)
                 self->abilityValue = 0;
             }
         }
+
+        // Controls Unchained flight cancel code
+        if (self->down && self->jumpPress) {
+            self->jumpAbilityState = 1;
+            self->state = Player_State_Air;
+            RSDK.PlaySfx(Player->sfxRoll, false, 255);
+            RSDK.SetSpriteAnimation(self->aniFrames, ANI_JUMP, &self->animator, false, 0);
+        }
+
     }
 }
 void Player_State_FlyCarried(void)
@@ -4945,35 +4969,45 @@ void Player_State_KnuxGlideDrop(void)
     RSDK_THIS(Player);
 
     if (self->onGround) {
-        if (!self->timer)
-            RSDK.PlaySfx(Player->sfxLand, false, 255);
+        // Controls Unchained Glide Drop actions code
+        if (self->jumpPress) {
+            self->velocity.x = 0;
+            if (self->down)
+                Player_Action_Spindash();
+            else
+                Player_Action_Jump(self);
+        }
+        else {
+            if (!self->timer)
+                RSDK.PlaySfx(Player->sfxLand, false, 255);
 
-        Player_Gravity_False();
+            Player_Gravity_False();
 
-        if (abs(Zone->autoScrollSpeed) > 0x20000) {
-            if (Zone->autoScrollSpeed <= 0) {
-                self->groundVel  = Zone->autoScrollSpeed + 0x20000;
-                self->velocity.x = Zone->autoScrollSpeed + 0x20000;
+            if (abs(Zone->autoScrollSpeed) > 0x20000) {
+                if (Zone->autoScrollSpeed <= 0) {
+                    self->groundVel  = Zone->autoScrollSpeed + 0x20000;
+                    self->velocity.x = Zone->autoScrollSpeed + 0x20000;
+                }
+                else {
+                    self->groundVel  = Zone->autoScrollSpeed - 0x20000;
+                    self->velocity.x = Zone->autoScrollSpeed - 0x20000;
+                }
+                self->timer = 16;
             }
             else {
-                self->groundVel  = Zone->autoScrollSpeed - 0x20000;
-                self->velocity.x = Zone->autoScrollSpeed - 0x20000;
+                self->groundVel  = 0;
+                self->velocity.x = 0;
+                RSDK.SetSpriteAnimation(self->aniFrames, ANI_GLIDE_LAND, &self->animator, false, 0);
             }
-            self->timer = 16;
-        }
-        else {
-            self->groundVel  = 0;
-            self->velocity.x = 0;
-            RSDK.SetSpriteAnimation(self->aniFrames, ANI_GLIDE_LAND, &self->animator, false, 0);
-        }
 
-        if (self->timer >= 16) {
-            self->state    = Player_State_Ground;
-            self->skidding = 0;
-            self->timer    = 0;
-        }
-        else {
-            self->timer++;
+            if (self->timer >= 16) {
+                self->state    = Player_State_Ground;
+                self->skidding = 0;
+                self->timer    = 0;
+            }
+            else {
+                self->timer++;
+            }
         }
     }
     else {
@@ -6110,7 +6144,8 @@ void Player_JumpAbility_Sonic(void)
 
     bool32 dropdashDisabled = self->jumpAbilityState <= 1;
 
-    if (self->jumpAbilityState == 1) {
+    // Controls Unchained roll-off air moves switch
+    if (self->jumpAbilityState <= 1) {
 #if MANIA_USE_PLUS
         if (self->stateInput != Player_Input_P2_AI || (self->up && globals->gameMode != MODE_ENCORE)) {
 #else
@@ -6131,9 +6166,9 @@ void Player_JumpAbility_Sonic(void)
                 else {
                     switch (self->shield) {
                         case SHIELD_NONE:
-                            if (globals->medalMods & MEDAL_INSTASHIELD) {
+                            // Controls Unchained insta-shield switch
+                            if (true) {
                                 self->invincibleTimer  = -8;
-                                self->jumpAbilityState = 0;
                                 RSDK.PlaySfx(Shield->sfxInstaShield, false, 255);
                                 RSDK.ResetEntity(shield, Shield->classID, self);
                                 shield->inkEffect = INK_ADD;
@@ -6211,7 +6246,7 @@ void Player_JumpAbility_Tails(void)
 {
     RSDK_THIS(Player);
 
-    if (self->jumpPress && self->jumpAbilityState == 1
+    if (self->jumpPress
         && (self->stateInput != Player_Input_P2_AI
             || (self->up
 #if MANIA_USE_PLUS
@@ -6244,7 +6279,7 @@ void Player_JumpAbility_Knux(void)
 {
     RSDK_THIS(Player);
 
-    if (self->jumpPress && self->jumpAbilityState == 1
+    if (self->jumpPress
         && (self->stateInput != Player_Input_P2_AI
             || (self->up
 #if MANIA_USE_PLUS
@@ -6288,8 +6323,8 @@ void Player_JumpAbility_Mighty(void)
 {
     RSDK_THIS(Player);
 
-    if (self->jumpAbilityState <= 1) {
-        if (self->jumpPress && self->jumpAbilityState == 1
+    if (true) {
+        if (self->jumpPress
             && (self->stateInput != Player_Input_P2_AI || (self->up && globals->gameMode != MODE_ENCORE))) {
             if (!self->invertGravity) {
                 self->velocity.x >>= 1;
@@ -6321,7 +6356,7 @@ void Player_JumpAbility_Ray(void)
 {
     RSDK_THIS(Player);
 
-    if (self->jumpPress && self->jumpAbilityState == 1
+    if (self->jumpPress
         && (self->stateInput != Player_Input_P2_AI || (self->up && globals->gameMode != MODE_ENCORE))) {
         if (!self->invertGravity) {
             self->jumpAbilityState = 0;
